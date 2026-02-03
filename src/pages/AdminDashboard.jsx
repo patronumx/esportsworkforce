@@ -1,0 +1,1356 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../utils/api';
+import { LogOut, Plus, Search, Calendar as CalendarIcon, User, CheckCircle, Clock, AlertTriangle, ExternalLink, Image as ImageIcon, Link as LinkIcon, X, Upload, LayoutDashboard, ClipboardList, Minus, Filter, Trash2, MessageSquare, Edit } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import Toast from '../components/Toast';
+import logo from '../assets/logo.png';
+
+const AdminDashboard = () => {
+    const [tasks, setTasks] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [teamStats, setTeamStats] = useState([]);
+    const [selectedMember, setSelectedMember] = useState(null);
+    // 'dashboard' | 'assign-task' | 'history' | 'assets' | 'team'
+    const [activeView, setActiveView] = useState('dashboard');
+    const [uploading, setUploading] = useState(false);
+    const [assetLinkInput, setAssetLinkInput] = useState('');
+    const [newTask, setNewTask] = useState({
+        title: '',
+        description: '',
+        assignedTo: '',
+        deadline: '',
+        assets: [], // Array of links
+        media: [] // Array of media URLs
+    });
+    // Review Modal State
+    const [reviewModal, setReviewModal] = useState({ show: false, task: null });
+    const [descriptionModal, setDescriptionModal] = useState({ show: false, task: null });
+    const [openAssetDropdownId, setOpenAssetDropdownId] = useState(null);
+    const [reviewRemark, setReviewRemark] = useState('');
+    const [reviewFile, setReviewFile] = useState(''); // URL for uploaded remark file
+    const [reviewUploading, setReviewUploading] = useState(false);
+    const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+    const [isEditingMember, setIsEditingMember] = useState(false);
+    const [editMemberData, setEditMemberData] = useState({});
+    const navigate = useNavigate();
+
+    const showToast = (message, type = 'success') => {
+        setToast({ show: true, message, type });
+    };
+    const user = JSON.parse(localStorage.getItem('userInfo'));
+
+    useEffect(() => {
+        if (!user || user.role !== 'Admin') {
+            navigate('/');
+        } else {
+            fetchData();
+            fetchTeamStats();
+        }
+    }, [navigate]);
+
+    const fetchData = async () => {
+        try {
+            const [tasksRes] = await Promise.all([
+                api.get('/tasks'),
+            ]);
+            setTasks(tasksRes.data);
+        } catch (error) {
+            console.error('Error fetching data', error);
+        }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const { data } = await api.get('/auth/users');
+            setUsers(data);
+        } catch (error) {
+            console.error('Failed to fetch users', error);
+        }
+    };
+
+    const fetchTeamStats = async () => {
+        try {
+            const { data } = await api.get('/auth/team-stats');
+            setTeamStats(data);
+        } catch (error) {
+            console.error('Failed to fetch team stats', error);
+        }
+    };
+
+    const handleAddLink = () => {
+        if (!assetLinkInput.trim()) return;
+        setNewTask({ ...newTask, assets: [...newTask.assets, assetLinkInput.trim()] });
+        setAssetLinkInput('');
+    };
+
+    const handleRemoveLink = (index) => {
+        setNewTask({ ...newTask, assets: newTask.assets.filter((_, i) => i !== index) });
+    };
+
+    const handleCreateTask = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/tasks', newTask);
+
+            // Allow user to stay or go back? Let's go back to dashboard to see the task.
+            setActiveView('dashboard');
+
+            setNewTask({ title: '', description: '', assignedTo: '', deadline: '', assets: [], media: [] });
+            fetchData();
+            showToast('Task Created!', 'success');
+        } catch (error) {
+            showToast('Failed to create task', 'error');
+        }
+    };
+
+    const handleReviewUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setReviewUploading(true);
+        const formData = new FormData();
+        formData.append('files', file);
+
+        try {
+            const { data } = await api.post('/upload', formData);
+            if (data.urls && data.urls.length > 0) {
+                setReviewFile(data.urls[0]);
+            }
+        } catch (error) {
+            console.error('Review upload failed', error);
+            showToast('Failed to upload remark file', 'error');
+        } finally {
+            setReviewUploading(false);
+        }
+    };
+
+    const handleReviewSubmit = async (status) => {
+        if (!reviewModal.task) return;
+        try {
+            await api.put(`/tasks/${reviewModal.task._id}`, {
+                status,
+                remarks: reviewRemark,
+                remarkFile: reviewFile
+            });
+            setReviewModal({ show: false, task: null });
+            setReviewRemark('');
+            setReviewFile('');
+            fetchData();
+            showToast(`Task ${status}!`, 'success');
+        } catch (error) {
+            console.error('Failed to update task', error);
+            showToast('Failed to update task status', 'error');
+        }
+    };
+
+    const handleStartEdit = (member) => {
+        setEditMemberData({
+            ...member,
+            skills: member.skills ? member.skills.join(', ') : ''
+        });
+        setIsEditingMember(true);
+    };
+
+    const handleUpdateMember = async (e) => {
+        e.preventDefault();
+        try {
+            const updatedData = {
+                ...editMemberData,
+                skills: typeof editMemberData.skills === 'string' ? editMemberData.skills.split(',').map(s => s.trim()) : editMemberData.skills
+            };
+
+            const { data } = await api.put(`/auth/${editMemberData._id}`, updatedData);
+
+            setTeamStats(teamStats.map(m => m._id === data._id ? { ...m, ...data, stats: m.stats } : m));
+            setSelectedMember({ ...data, stats: selectedMember.stats });
+            setIsEditingMember(false);
+            showToast('Member profile updated successfully');
+        } catch (error) {
+            console.error('Failed to update member', error);
+            showToast('Failed to update member', 'error');
+        }
+    };
+
+    const handleDeleteMember = async (memberId) => {
+        if (window.confirm('Are you sure you want to remove this member? This action cannot be undone.')) {
+            try {
+                await api.delete(`/auth/${memberId}`);
+                setTeamStats(teamStats.filter(m => m._id !== memberId));
+                setSelectedMember(null);
+                showToast('Team member removed successfully');
+            } catch (error) {
+                console.error('Failed to delete member', error);
+                showToast('Failed to delete member', 'error');
+            }
+        }
+    };
+
+    const handleAdminAvatarUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('files', file);
+
+        try {
+            const { data } = await api.post('/upload', formData);
+            if (data.urls && data.urls.length > 0) {
+                setEditMemberData(prev => ({ ...prev, avatar: data.urls[0] }));
+                showToast('Avatar uploaded! Click Save to apply.');
+            }
+        } catch (error) {
+            console.error('Avatar upload failed', error);
+            showToast('Failed to upload avatar', 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleGlobalAssetDelete = async (assetUrl, taskId, fieldType) => {
+        if (!window.confirm('Are you sure you want to delete this asset? This cannot be undone.')) return;
+
+        try {
+            // 1. Delete from Cloudinary
+            const publicId = getPublicIdFromUrl(assetUrl);
+            if (publicId) {
+                await api.delete('/upload', { data: { public_id: publicId } });
+            }
+
+            // 2. Update Task in DB
+            const task = tasks.find(t => t._id === taskId);
+            if (!task) return;
+
+            let updates = {};
+            if (fieldType === 'assets') {
+                updates.assets = task.assets.filter(a => a !== assetUrl);
+            } else if (fieldType === 'media') {
+                updates.media = task.media.filter(m => m !== assetUrl);
+            } else if (fieldType === 'remarkFile') {
+                updates.remarkFile = '';
+            } else if (fieldType === 'submission') {
+                updates.submission = { ...task.submission, fileUrl: '' };
+            }
+
+            await api.put(`/tasks/${taskId}`, updates);
+            showToast('Asset deleted successfully');
+            fetchData();
+        } catch (error) {
+            console.error('Failed to delete asset', error);
+            showToast('Failed to delete asset', 'error');
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('userInfo');
+        navigate('/');
+    };
+
+    const handleDeleteTask = async (taskId) => {
+        if (!window.confirm("Are you sure you want to remove this task from your history? It will remain visible to the worker.")) return;
+        try {
+            await api.put(`/tasks/${taskId}`, { isHiddenFromAdmin: true });
+            setToast({ show: true, message: 'Task removed from history.', type: 'success' });
+            // Remove locally
+            setTasks(prev => prev.filter(t => t._id !== taskId));
+        } catch (error) {
+            console.error('Error deleting task:', error);
+            setToast({ show: true, message: 'Failed to delete task.', type: 'error' });
+        }
+    };
+
+    const getPublicIdFromUrl = (url) => {
+        try {
+            // Example URL: https://res.cloudinary.com/demo/image/upload/v12345678/folder/filename.jpg
+            if (!url) return null;
+            const splitUrl = url.split('/');
+            const filename = splitUrl[splitUrl.length - 1]; // filename.jpg
+            const folder = splitUrl[splitUrl.length - 2]; // folder
+            const publicId = `${folder}/${filename.split('.')[0]}`;
+            return publicId;
+        } catch (error) {
+            console.error('Error extracting public ID:', error);
+            return null;
+        }
+    };
+
+    const removeMedia = async (indexToRemove) => {
+        const urlToDelete = newTask.media[indexToRemove];
+
+        // Optimistically remove from UI
+        setNewTask({
+            ...newTask,
+            media: newTask.media.filter((_, index) => index !== indexToRemove)
+        });
+
+        // Trigger Delete in Backend
+        const publicId = getPublicIdFromUrl(urlToDelete);
+        if (publicId) {
+            try {
+                // Determine resource type based on extension
+                const isVideo = urlToDelete.match(/\.(mp4|mov|webm)$/i);
+                await api.delete('/upload', {
+                    data: {
+                        publicId,
+                        resourceType: isVideo ? 'video' : 'image'
+                    }
+                });
+                console.log('Deleted from Cloudinary:', publicId);
+            } catch (error) {
+                console.error('Failed to delete from Cloudinary:', error);
+                // Optionally revert UI if strict consistency is needed,
+                // but for UX usually better to just log it.
+            }
+        }
+    };
+
+    return (
+        <div className="flex h-screen bg-[#050b14] text-white overflow-hidden relative font-sans">
+            {/* Background Effects */}
+            <div className="absolute top-0 right-0 w-full h-full z-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-emerald-600/5 blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-blue-600/5 blur-[120px] animate-pulse delay-700"></div>
+            </div>
+
+            {/* Sidebar */}
+            <aside className="w-64 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800/50 flex flex-col z-20">
+                <div className="p-6 flex items-center gap-3">
+                    <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
+                    <div>
+                        <h1 className="text-xs font-bold text-white leading-tight">
+                            PATRONUM<br /><span className="text-blue-400">ESPORTS</span>
+                        </h1>
+                    </div>
+                </div>
+
+                <nav className="flex flex-col gap-2 p-4 flex-1">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === 'dashboard'
+                            ? 'bg-slate-700 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                            }`}
+                    >
+                        <LayoutDashboard size={18} /> Dashboard
+                    </button>
+                    <button
+                        onClick={() => setActiveView('assign-task')}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === 'assign-task'
+                            ? 'bg-slate-700 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                            }`}
+                    >
+                        <ClipboardList size={18} /> Assign Task
+                    </button>
+                    <button
+                        onClick={() => setActiveView('history')}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === 'history'
+                            ? 'bg-slate-700 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                            }`}
+                    >
+                        <Clock size={18} /> History
+                    </button>
+                    <button
+                        onClick={() => setActiveView('assets')}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === 'assets'
+                            ? 'bg-slate-700 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                            }`}
+                    >
+                        <ImageIcon size={18} /> Assets
+                    </button>
+                    <button
+                        onClick={() => setActiveView('team')}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === 'team'
+                            ? 'bg-slate-700 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                            }`}
+                    >
+                        <User size={18} /> Team
+                    </button>
+                </nav>
+
+                <div className="p-4 border-t border-slate-800/50">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm text-white">
+                            {user?.username?.charAt(0).toUpperCase() || 'A'}
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-white">{user?.username || 'Administrator'}</h3>
+                            <p className="text-xs text-slate-400">{user?.role || 'Admin'}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center justify-center gap-2 p-2.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors border border-red-500/10"
+                        title="Logout"
+                    >
+                        <LogOut size={18} />
+                        Log Out
+                    </button>
+                </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar p-8 relative z-10">
+                {activeView === 'dashboard' && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-6"
+                    >
+                        <header className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-3xl font-bold text-white mb-2">Dashboard</h2>
+                                <p className="text-slate-400">Overview of active tasks and team performance.</p>
+                            </div>
+                            <button
+                                onClick={() => setActiveView('assign-task')}
+                                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
+                            >
+                                <Plus size={18} /> New Task
+                            </button>
+                        </header>
+
+                        <div className="bg-slate-900/50 border border-slate-700/50 rounded-2xl overflow-hidden backdrop-blur-sm shadow-xl">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-slate-700/50 text-xs text-slate-400 uppercase tracking-wider bg-slate-800/30">
+                                            <th className="p-5 font-bold">Task Details</th>
+                                            <th className="p-5 font-bold">Assigned To</th>
+                                            <th className="p-5 font-bold">Timeline</th>
+                                            <th className="p-5 font-bold">Status</th>
+                                            <th className="p-5 font-bold">Submission</th>
+                                            <th className="p-5 font-bold">Remarks</th>
+                                            <th className="p-5 font-bold text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700/50">
+                                        {tasks.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="7" className="p-12 text-center text-slate-500">
+                                                    <div className="flex flex-col items-center gap-4">
+                                                        <ClipboardList size={48} className="opacity-20" />
+                                                        <p>No tasks found. Create one to get started.</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            tasks.filter(t => !t.isHiddenFromAdmin).map(task => (
+                                                <tr key={task._id} className="hover:bg-slate-800/30 transition-colors group">
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="font-bold text-white text-sm">{task.title}</span>
+                                                            {/* Description Modal Trigger */}
+                                                            <button
+                                                                onClick={() => setDescriptionModal({ show: true, task })}
+                                                                className="text-xs text-slate-400 hover:text-blue-400 text-left line-clamp-1 transition-colors"
+                                                            >
+                                                                {task.description || 'No description provided'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-700">
+                                                                {task.assignedTo?.username?.charAt(0).toUpperCase() || '?'}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm text-slate-200">{task.assignedTo?.username || 'Unassigned'}</p>
+                                                                <p className="text-xs text-slate-500">{task.assignedTo?.role}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500" title="Assigned Date">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                                                                {task.createdAt ? new Date(task.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
+                                                            </div>
+                                                            <div className="h-4 pl-[3px] border-l border-slate-800 ml-[2.5px]"></div>
+                                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300" title="Deadline">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+                                                                {task.deadline ? new Date(task.deadline).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'No Deadline'}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-[0_0_10px_rgba(0,0,0,0.2)]
+                                                        ${task.status === 'Completed' ? 'bg-green-500/10 text-green-400 border border-green-500/20 shadow-[0_0_15px_rgba(74,222,128,0.1)]' :
+                                                                task.status === 'Submitted' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-[0_0_15px_rgba(192,132,252,0.1)]' :
+                                                                    task.status === 'In Progress' ? 'bg-blue-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]' :
+                                                                        'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_15px_rgba(251,191,36,0.1)]'}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${task.status === 'Completed' ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)]' :
+                                                                task.status === 'Submitted' ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]' :
+                                                                    task.status === 'In Progress' ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                                                                }`}></span>
+                                                            {task.status}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        {task.submission?.fileUrl ? (
+                                                            <div className="flex flex-col gap-2">
+                                                                <a
+                                                                    href={task.submission.fileUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg transition-colors w-fit"
+                                                                    title="View Submitted Work"
+                                                                >
+                                                                    <ExternalLink size={14} />
+                                                                    <span className="text-xs font-bold">View Design</span>
+                                                                </a>
+                                                                {task.submissionTime && (
+                                                                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                                                        <Clock size={10} />
+                                                                        {new Date(task.submissionTime).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <Minus className="text-slate-700 opacity-50" size={16} />
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        {task.remarks ? (
+                                                            <div className="group relative w-fit">
+                                                                <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg hover:bg-purple-500/20 cursor-help transition-colors border border-purple-500/20">
+                                                                    <MessageSquare size={16} />
+                                                                </div>
+                                                                {/* Tooltip */}
+                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-[#0f1218] border border-slate-700 p-4 rounded-xl shadow-2xl text-xs text-white opacity-0 group-hover:opacity-100 transition-all pointer-events-none group-hover:pointer-events-auto z-50">
+                                                                    <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0f1218] border-b border-r border-slate-700 rotate-45"></div>
+                                                                    <h4 className="font-bold mb-2 text-purple-400 uppercase tracking-wider text-[10px]">Admin Remarks</h4>
+                                                                    <p className="text-slate-300 leading-relaxed mb-3">"{task.remarks}"</p>
+                                                                    {task.remarkFile && (
+                                                                        <div className="pt-3 border-t border-slate-800/50">
+                                                                            <a href={task.remarkFile} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 group/link">
+                                                                                <LinkIcon size={12} />
+                                                                                <span className="font-medium">View Attachment</span>
+                                                                                <ExternalLink size={10} className="ml-auto opacity-50 group-hover/link:opacity-100" />
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-2 text-slate-700 opacity-20">
+                                                                <MessageSquare size={16} />
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-5 text-right">
+                                                        <div className="flex justify-end gap-2 items-center">
+                                                            {task.status === 'Completed' && (
+                                                                <button
+                                                                    onClick={() => handleDeleteTask(task._id)}
+                                                                    className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
+                                                                    title="Remove from History"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            )}
+
+                                                            {task.status === 'Submitted' && (
+                                                                <button
+                                                                    onClick={() => setReviewModal({ show: true, task })}
+                                                                    className="px-3 py-1.5 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+                                                                >
+                                                                    <CheckCircle size={12} /> Review
+                                                                </button>
+                                                            )}
+
+                                                            {/* Assets Display Logic */}
+                                                            {(() => {
+                                                                // Combine legacy assets and new media
+                                                                const allAssets = [
+                                                                    ...(task.media || []),
+                                                                    ...(task.assets || [])
+                                                                ].filter(Boolean);
+
+                                                                if (allAssets.length === 0) return null;
+
+                                                                if (allAssets.length === 1) {
+                                                                    return (
+                                                                        <a
+                                                                            href={allAssets[0]}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            className="p-2 bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors border border-slate-700/50"
+                                                                            title="View Asset"
+                                                                        >
+                                                                            <LinkIcon size={16} />
+                                                                        </a>
+                                                                    );
+                                                                }
+
+                                                                return (
+                                                                    <div className="relative">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenAssetDropdownId(openAssetDropdownId === task._id ? null : task._id);
+                                                                            }}
+                                                                            className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg transition-colors text-xs font-bold ${openAssetDropdownId === task._id
+                                                                                ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                                                                                : 'bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 border-blue-500/20'
+                                                                                }`}
+                                                                        >
+                                                                            <ImageIcon size={14} />
+                                                                            <span>{allAssets.length} Assets</span>
+                                                                        </button>
+
+                                                                        {/* Click-Triggered Dropdown */}
+                                                                        {openAssetDropdownId === task._id && (
+                                                                            <>
+                                                                                <div
+                                                                                    className="fixed inset-0 z-40"
+                                                                                    onClick={() => setOpenAssetDropdownId(null)}
+                                                                                ></div>
+                                                                                <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold px-2 py-1 mb-1">Attached Files</div>
+                                                                                    <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                                                                                        {allAssets.map((url, i) => (
+                                                                                            <a
+                                                                                                key={i}
+                                                                                                href={url}
+                                                                                                target="_blank"
+                                                                                                rel="noreferrer"
+                                                                                                onClick={() => setOpenAssetDropdownId(null)}
+                                                                                                className="flex items-center gap-2 px-2 py-2 hover:bg-slate-800 rounded-lg text-xs text-slate-300 hover:text-white transition-colors truncate"
+                                                                                            >
+                                                                                                <ExternalLink size={12} />
+                                                                                                Asset {i + 1}
+                                                                                            </a>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                </tr >
+                                            )))}
+                                    </tbody >
+                                </table >
+                            </div >
+                        </div >
+                    </motion.div >
+                )}
+
+                {
+                    activeView === 'assign-task' && (
+                        <motion.div
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="max-w-4xl mx-auto"
+                        >
+                            <header className="mb-8">
+                                <h2 className="text-3xl font-bold text-white mb-2">Assign New Task</h2>
+                                <p className="text-slate-400">Create a task and assign it to a team member.</p>
+                            </header>
+
+                            <div className="bg-[#0f1218] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+                                <form onSubmit={handleCreateTask} className="space-y-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Task Title <span className="text-red-400">*</span></label>
+                                        <input
+                                            required
+                                            type="text"
+                                            value={newTask.title}
+                                            onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                                            className="w-full bg-[#1a1f2e] border-2 border-transparent focus:border-emerald-500/50 rounded-xl px-4 py-3 text-white focus:bg-[#1a1f2e] outline-none transition-all placeholder-slate-600"
+                                            placeholder="e.g. Tekken 8 Tournament Highlights"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Assign To <span className="text-red-400">*</span></label>
+                                            <div className="relative">
+                                                <select
+                                                    required
+                                                    value={newTask.assignedTo}
+                                                    onChange={e => setNewTask({ ...newTask, assignedTo: e.target.value })}
+                                                    className="w-full bg-[#1a1f2e] border-2 border-transparent focus:border-emerald-500/50 rounded-xl px-4 py-3 text-white outline-none appearance-none cursor-pointer"
+                                                >
+                                                    <option value="">Select Worker...</option>
+                                                    {users.filter(u => u.role !== 'Admin').map(u => (
+                                                        <option key={u._id} value={u._id}>{u.username} ({u.role})</option>
+                                                    ))}
+                                                </select>
+                                                <div className="absolute right-4 top-3.5 pointer-events-none text-slate-500">▼</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Deadline <span className="text-red-400">*</span></label>
+                                            <input
+                                                required
+                                                type="datetime-local"
+                                                value={newTask.deadline}
+                                                onChange={e => setNewTask({ ...newTask, deadline: e.target.value })}
+                                                className="w-full bg-[#1a1f2e] border-2 border-transparent focus:border-emerald-500/50 rounded-xl px-4 py-3 text-white outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Description</label>
+                                        <textarea
+                                            rows="4"
+                                            value={newTask.description}
+                                            onChange={e => setNewTask({ ...newTask, description: e.target.value })}
+                                            className="w-full bg-[#1a1f2e] border-2 border-transparent focus:border-emerald-500/50 rounded-xl px-4 py-3 text-white outline-none resize-none placeholder-slate-600"
+                                            placeholder="Add detailed instructions..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Assets Links</label>
+                                        <div className="space-y-3">
+                                            <div className="relative flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <LinkIcon className="absolute left-4 top-3.5 text-slate-500 w-4 h-4" />
+                                                    <input
+                                                        type="url"
+                                                        value={assetLinkInput}
+                                                        onChange={e => setAssetLinkInput(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddLink())}
+                                                        placeholder="https://drive.google.com..."
+                                                        className="w-full bg-[#1a1f2e] border-2 border-transparent focus:border-emerald-500/50 rounded-xl pl-10 pr-4 py-3 text-white outline-none placeholder-slate-600"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddLink}
+                                                    className="px-4 py-2 bg-emerald-600/10 text-emerald-400 border border-emerald-600/20 rounded-xl hover:bg-emerald-600/20 transition-colors"
+                                                >
+                                                    <Plus size={20} />
+                                                </button>
+                                            </div>
+
+                                            {/* Added Links List */}
+                                            {newTask.assets.length > 0 && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {newTask.assets.map((link, index) => (
+                                                        <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-300">
+                                                            <span className="truncate max-w-[200px]">{link}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveLink(index)}
+                                                                className="text-slate-500 hover:text-red-400 transition-colors"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2 ml-1">Task Attachments (Images/Videos)</label>
+                                        <div className="relative group space-y-4">
+                                            <div
+                                                className={`relative w-full h-40 bg-[#1a1f2e] border-2 border-dashed ${uploading ? 'border-emerald-500/50' : 'border-slate-700/50 hover:border-emerald-500/50'} rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden`}
+                                            >
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,video/*"
+                                                    multiple
+                                                    onChange={async (e) => {
+                                                        const files = Array.from(e.target.files);
+                                                        if (!files.length) return;
+
+                                                        setUploading(true);
+                                                        const formData = new FormData();
+                                                        files.forEach(file => formData.append('files', file));
+
+                                                        try {
+                                                            const { data } = await api.post('/upload', formData); // Let Axios handle Content-Type & boundary
+                                                            setNewTask({ ...newTask, media: [...newTask.media, ...data.urls] });
+                                                        } catch (error) {
+                                                            console.error('Upload error:', error);
+                                                            alert(`Upload failed: ${error.response?.data?.message || error.message}`);
+                                                        } finally {
+                                                            setUploading(false);
+                                                        }
+                                                    }}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    disabled={uploading}
+                                                />
+
+                                                {uploading ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                                                        <span className="text-xs text-emerald-400 font-medium">Uploading {uploading} files...</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-3 text-slate-500 group-hover:text-emerald-400 transition-colors">
+                                                        <div className="p-4 bg-slate-800/50 rounded-full group-hover:bg-emerald-500/10 transition-colors">
+                                                            <Upload size={24} />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <p className="text-sm font-medium">Click or Drag to Upload Files</p>
+                                                            <p className="text-xs text-slate-600 mt-1">Images & Videos Supported</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Media Previews */}
+                                            {newTask.media.length > 0 && (
+                                                <div className="grid grid-cols-4 gap-4">
+                                                    {newTask.media.map((url, index) => (
+                                                        <div key={index} className="relative group/preview aspect-video bg-black rounded-lg overflow-hidden border border-slate-700">
+                                                            {url.includes('.mp4') || url.includes('.mov') ? (
+                                                                <video src={url} className="w-full h-full object-cover opacity-80" />
+                                                            ) : (
+                                                                <img src={url} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeMedia(index)}
+                                                                className="absolute top-1 right-1 p-1 bg-red-500/80 rounded-full text-white opacity-0 group-hover/preview:opacity-100 transition-opacity"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-6 border-t border-slate-800/50">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveView('dashboard')}
+                                            className="px-6 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors font-medium border border-transparent hover:border-slate-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 rounded-xl text-white font-bold shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] flex items-center gap-2"
+                                        >
+                                            <CheckCircle size={18} />
+                                            Assign Task
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </motion.div>
+                    )
+                }
+
+                {
+                    activeView === 'assets' && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="space-y-6"
+                        >
+                            <header className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-white mb-2">Asset Manager</h2>
+                                    <p className="text-slate-400">Manage all uploaded files and media.</p>
+                                </div>
+                            </header>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                                {tasks.flatMap(task => {
+                                    const assets = [];
+                                    if (task.assets) task.assets.forEach(url => assets.push({ url, type: 'assets', task }));
+                                    if (task.media) task.media.forEach(url => assets.push({ url, type: 'media', task }));
+                                    if (task.remarkFile) assets.push({ url: task.remarkFile, type: 'remarkFile', task });
+                                    if (task.submission?.fileUrl) assets.push({ url: task.submission.fileUrl, type: 'submission', task });
+                                    return assets;
+                                }).filter(asset => asset.url && (asset.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) || asset.url.includes('cloudinary'))).length === 0 ? (
+                                    <div className="col-span-full py-20 text-center text-slate-500 bg-slate-900/30 rounded-2xl border border-slate-800/50 border-dashed">
+                                        <ImageIcon size={48} className="mx-auto mb-4 opacity-50" />
+                                        <p>No assets found in the system.</p>
+                                    </div>
+                                ) : (
+                                    tasks.flatMap(task => {
+                                        const assets = [];
+                                        if (task.assets) task.assets.forEach(url => assets.push({ url, type: 'assets', task }));
+                                        if (task.media) task.media.forEach(url => assets.push({ url, type: 'media', task }));
+                                        if (task.remarkFile) assets.push({ url: task.remarkFile, type: 'remarkFile', task });
+                                        if (task.submission?.fileUrl) assets.push({ url: task.submission.fileUrl, type: 'submission', task });
+                                        return assets;
+                                    }).filter(asset => asset.url && (asset.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) || asset.url.includes('cloudinary'))).map((asset, index) => (
+                                        <div key={index} className="group relative bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700/50 hover:border-emerald-500/50 transition-all shadow-lg hover:shadow-emerald-500/10">
+                                            <div className="aspect-square relative overflow-hidden">
+                                                <img src={asset.url} alt="Asset" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                    <a href={asset.url} target="_blank" rel="noreferrer" className="p-2 bg-slate-800/80 text-white rounded-lg hover:bg-emerald-500 transition-colors">
+                                                        <ExternalLink size={16} />
+                                                    </a>
+                                                    <button
+                                                        onClick={() => handleGlobalAssetDelete(asset.url, asset.task._id, asset.type)}
+                                                        className="p-2 bg-slate-800/80 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="p-3">
+                                                <p className="text-xs text-slate-400 truncate font-mono mb-1">{asset.type}</p>
+                                                <p className="text-sm font-medium text-white truncate" title={asset.task.title}>{asset.task.title}</p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </motion.div>
+                    )
+                }
+
+                {
+                    activeView === 'team' && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="space-y-6"
+                        >
+                            <header className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-white mb-2">Team Members</h2>
+                                    <p className="text-slate-400">Manage and view all registered editors.</p>
+                                </div>
+                                <div className="px-4 py-2 bg-slate-800/50 rounded-lg text-sm text-slate-300 border border-slate-700">
+                                    {teamStats.length} Total Members
+                                </div>
+                            </header>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {teamStats.map(member => (
+                                    <div
+                                        key={member._id}
+                                        onClick={() => setSelectedMember(member)}
+                                        className="bg-slate-900/50 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-6 cursor-pointer group transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10"
+                                    >
+                                        <div className="flex flex-col items-center text-center">
+                                            <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-slate-700 overflow-hidden mb-4 group-hover:border-blue-500 transition-colors relative">
+                                                {member.avatar ? (
+                                                    <img src={member.avatar} alt={member.username} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-slate-500">
+                                                        {member.username.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{member.username}</h3>
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 mb-4">{member.role}</span>
+
+                                            <div className="grid grid-cols-3 gap-2 w-full pt-4 border-t border-slate-800/50">
+                                                <div className="text-center">
+                                                    <div className="text-xs text-slate-500 mb-1">Done</div>
+                                                    <div className="font-bold text-emerald-400">{member.stats?.completed || 0}</div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="text-xs text-slate-500 mb-1">Active</div>
+                                                    <div className="font-bold text-blue-400">{member.stats?.inProgress || 0}</div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="text-xs text-slate-500 mb-1">Total</div>
+                                                    <div className="font-bold text-white">{member.stats?.total || 0}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )
+                }
+            </main>
+
+            {/* Member Details Modal */}
+            <AnimatePresence>
+                {selectedMember && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setSelectedMember(null)}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative bg-[#0f1218] border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="relative h-24 bg-gradient-to-r from-blue-600/20 to-purple-600/20">
+                                <div className="absolute top-4 right-4 flex gap-2 z-10">
+                                    {!isEditingMember && (
+                                        <>
+                                            <button
+                                                onClick={() => handleStartEdit(selectedMember)}
+                                                className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors backdrop-blur-sm"
+                                                title="Edit Profile"
+                                            >
+                                                <Edit size={20} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteMember(selectedMember._id)}
+                                                className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-full text-red-400 hover:text-white transition-colors backdrop-blur-sm"
+                                                title="Delete Member"
+                                            >
+                                                <Trash2 size={20} />
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={() => { setSelectedMember(null); setIsEditingMember(false); }}
+                                        className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors backdrop-blur-sm"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="px-8 pb-8 -mt-12 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                                <div className="w-24 h-24 rounded-full bg-[#0f1218] p-1.5 mx-auto mb-4 relative group">
+                                    <div className="w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 overflow-hidden flex items-center justify-center">
+                                        {isEditingMember && editMemberData.avatar ? (
+                                            <img src={editMemberData.avatar} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : selectedMember.avatar ? (
+                                            <img src={selectedMember.avatar} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-3xl font-bold text-slate-600">{selectedMember.username.charAt(0).toUpperCase()}</span>
+                                        )}
+                                    </div>
+
+                                    {isEditingMember && (
+                                        <>
+                                            <label htmlFor="admin-avatar-upload" className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20 m-1.5">
+                                                <Upload className="text-white" size={20} />
+                                            </label>
+                                            <input
+                                                type="file"
+                                                id="admin-avatar-upload"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleAdminAvatarUpload}
+                                                disabled={uploading}
+                                            />
+                                        </>
+                                    )}
+                                </div>
+
+                                {isEditingMember ? (
+                                    <form onSubmit={handleUpdateMember} className="space-y-4">
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Username</label>
+                                            <input
+                                                type="text"
+                                                value={editMemberData.username}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, username: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Role</label>
+                                            <select
+                                                value={editMemberData.role}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, role: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500"
+                                            >
+                                                <option value="Video Editor">Video Editor</option>
+                                                <option value="Graphic Designer">Graphic Designer</option>
+                                                <option value="Worker">Worker</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Email</label>
+                                            <input
+                                                type="email"
+                                                value={editMemberData.email}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, email: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Bio</label>
+                                            <textarea
+                                                rows="3"
+                                                value={editMemberData.bio}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, bio: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500 resize-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Skills (comma separated)</label>
+                                            <input
+                                                type="text"
+                                                value={editMemberData.skills}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, skills: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Portfolio Link</label>
+                                            <input
+                                                type="text"
+                                                value={editMemberData.portfolioLink}
+                                                onChange={(e) => setEditMemberData({ ...editMemberData, portfolioLink: e.target.value })}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-blue-500"
+                                            />
+                                        </div>
+
+                                        <div className="flex gap-3 pt-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditingMember(false)}
+                                                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-colors shadow-lg shadow-blue-600/20"
+                                            >
+                                                Save Changes
+                                            </button>
+                                        </div>
+                                    </form>
+                                ) : (
+                                    <>
+                                        <div className="text-center mb-6">
+                                            <h3 className="text-2xl font-bold text-white mb-1">{selectedMember.username}</h3>
+                                            <p className="text-blue-400 font-medium">{selectedMember.role}</p>
+                                            <p className="text-slate-500 text-sm mt-1">{selectedMember.email}</p>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 text-center">
+                                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">Tasks Completed</div>
+                                                    <div className="text-2xl font-bold text-emerald-400">{selectedMember.stats?.completed || 0}</div>
+                                                </div>
+                                                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 text-center">
+                                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">Total Assigned</div>
+                                                    <div className="text-2xl font-bold text-white">{selectedMember.stats?.total || 0}</div>
+                                                </div>
+                                            </div>
+
+                                            {selectedMember.bio && (
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">About</h4>
+                                                    <p className="text-slate-300 text-sm leading-relaxed bg-slate-900/30 p-4 rounded-xl border border-slate-800/50">
+                                                        {selectedMember.bio}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Skills</h4>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {selectedMember.skills && selectedMember.skills.length > 0 ? selectedMember.skills.map((skill, i) => (
+                                                            <span key={i} className="px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded border border-blue-500/20">
+                                                                {skill}
+                                                            </span>
+                                                        )) : <span className="text-slate-600 text-xs italic">No skills listed</span>}
+                                                    </div>
+                                                </div>
+                                                {selectedMember.portfolioLink && (
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Portfolio</h4>
+                                                        <a
+                                                            href={selectedMember.portfolioLink}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="flex items-center gap-2 text-blue-400 hover:text-white transition-colors text-sm"
+                                                        >
+                                                            <LinkIcon size={16} />
+                                                            View Portfolio <ExternalLink size={12} />
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Review Modal */}
+            <AnimatePresence>
+                {
+                    reviewModal.show && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                className="bg-[#0f1218] border border-slate-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                            >
+                                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                                    <h3 className="text-xl font-bold text-white">Review Submission</h3>
+                                    <button onClick={() => setReviewModal({ show: false, task: null })} className="text-slate-500 hover:text-white">
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Submission Link */}
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">Submitted Link</p>
+                                        {reviewModal.task?.submission?.fileUrl ? (
+                                            <a href={reviewModal.task.submission.fileUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline break-all text-sm flex items-center gap-2">
+                                                <ExternalLink size={14} />
+                                                {reviewModal.task.submission.fileUrl}
+                                            </a>
+                                        ) : (
+                                            <p className="text-slate-500 italic text-sm">No link provided</p>
+                                        )}
+                                    </div>
+
+                                    {/* Remarks Input */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2">Remarks / Feedback</label>
+                                        <textarea
+                                            rows="3"
+                                            value={reviewRemark}
+                                            onChange={(e) => setReviewRemark(e.target.value)}
+                                            className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500/50 transition-colors placeholder-slate-600 resize-none"
+                                            placeholder="Add comments about what needs to be changed..."
+                                        />
+                                    </div>
+
+                                    {/* Annotated File Upload */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-400 mb-2">Upload Annotated Design (Optional)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="file"
+                                                onChange={handleReviewUpload}
+                                                className="hidden"
+                                                id="review-upload"
+                                                disabled={reviewUploading}
+                                            />
+                                            <label
+                                                htmlFor="review-upload"
+                                                className={`flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed ${reviewFile ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-700 hover:border-slate-500 bg-slate-900/30'} rounded-xl cursor-pointer transition-all`}
+                                            >
+                                                {reviewUploading ? (
+                                                    <span className="text-xs text-slate-400 animate-pulse">Uploading...</span>
+                                                ) : reviewFile ? (
+                                                    <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><CheckCircle size={12} /> File Attached</span>
+                                                ) : (
+                                                    <>
+                                                        <Upload size={16} className="text-slate-500" />
+                                                        <span className="text-xs text-slate-400 font-medium">Click to Upload</span>
+                                                    </>
+                                                )}
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 border-t border-slate-800 bg-slate-900/30 flex gap-3">
+                                    <button
+                                        onClick={() => handleReviewSubmit('In Progress')}
+                                        disabled={reviewUploading}
+                                        className="flex-1 py-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl font-bold hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <X size={16} /> Request Changes
+                                    </button>
+                                    <button
+                                        onClick={() => handleReviewSubmit('Completed')}
+                                        disabled={reviewUploading}
+                                        className="flex-1 py-3 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl font-bold hover:bg-green-500/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <CheckCircle size={16} /> Approve & Complete
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )
+                }
+            </AnimatePresence>
+
+            {/* Description Modal */}
+            <AnimatePresence>
+                {
+                    descriptionModal.show && descriptionModal.task && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setDescriptionModal({ show: false, task: null })}
+                                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative bg-[#0f1218] border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
+                            >
+                                <div className="p-6 border-b border-slate-800/50 flex justify-between items-start gap-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white mb-1">{descriptionModal.task.title}</h3>
+                                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Task Description</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setDescriptionModal({ show: false, task: null })}
+                                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                                    <div className="prose prose-invert prose-sm max-w-none text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                        {descriptionModal.task.description || 'No description provided.'}
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-slate-900/50 border-t border-slate-800/50 flex justify-end">
+                                    <button
+                                        onClick={() => setDescriptionModal({ show: false, task: null })}
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )
+                }
+            </AnimatePresence>
+
+            {
+                toast.show && (
+                    <Toast
+                        message={toast.message}
+                        type={toast.type}
+                        onClose={() => setToast({ ...toast, show: false })}
+                    />
+                )
+            }
+        </div>
+    );
+};
+
+export default AdminDashboard;
