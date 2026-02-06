@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import api from '../utils/api';
-import { LogOut, Upload, CheckCircle, Clock, AlertCircle, FileText, Download, Calendar as CalendarIcon, X, Image as ImageIcon, ExternalLink, User, Activity } from 'lucide-react';
+import { LogOut, Upload, CheckCircle, Clock, AlertCircle, FileText, Download, Calendar as CalendarIcon, X, Image as ImageIcon, ExternalLink, User, Activity, MessageSquare } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import ScheduleView from '../components/ScheduleView';
 import Toast from '../components/Toast';
+import ChatInterface from '../components/ChatInterface';
+import WhatsAppConnect from '../components/WhatsAppConnect';
 import logo from '../assets/logo.png';
 
 const WorkerDashboard = () => {
@@ -20,6 +22,7 @@ const WorkerDashboard = () => {
     const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
     const [descriptionModal, setDescriptionModal] = useState({ show: false, task: null });
     const [feedbackTaskId, setFeedbackTaskId] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
     const navigate = useNavigate();
 
     // Profile State
@@ -51,8 +54,24 @@ const WorkerDashboard = () => {
                 avatar: userInfo.avatar || ''
             });
             fetchTasks();
+            fetchUnreadCount();
         }
     }, [navigate]);
+
+    // Poll for unread messages
+    useEffect(() => {
+        const interval = setInterval(fetchUnreadCount, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const fetchUnreadCount = async () => {
+        try {
+            const { data } = await api.get('/chat/unread/count');
+            setUnreadCount(data.count);
+        } catch (error) {
+            console.error('Failed to fetch unread count', error);
+        }
+    };
 
     const handleProfileUpdate = async (e) => {
         e.preventDefault();
@@ -99,10 +118,10 @@ const WorkerDashboard = () => {
         navigate('/');
     };
 
-    const handleSubmitWork = async (taskId, fileUrl) => {
+    const handleSubmitWork = async (taskId) => {
         try {
             const submittedData = {
-                submission: { fileUrl },
+                submission: { fileUrl: submissionLink },
                 status: 'Submitted',
                 submissionTime: new Date()
             };
@@ -111,6 +130,10 @@ const WorkerDashboard = () => {
 
             setTasks(tasks.map(t => t._id === taskId ? data : t));
             setToast({ show: true, message: 'Work submitted successfully!', type: 'success' });
+
+            // Reset UI state to close form and clear input
+            setSelectedTask(null);
+            setSubmissionLink('');
         } catch (error) {
             console.error('Failed to submit work', error);
             setToast({ show: true, message: 'Failed to submit work', type: 'error' });
@@ -174,18 +197,18 @@ const WorkerDashboard = () => {
 
 
     return (
-        <div className="flex h-screen bg-[#050b14] text-white overflow-hidden relative">
+        <div className="flex h-screen bg-patronum-bg text-white overflow-hidden relative">
             {/* Background Effects */}
             <div className="absolute top-0 left-0 w-full h-full z-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-patronum-primary/10 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-fuchsia-600/10 rounded-full blur-[120px] animate-pulse"></div>
             </div>
 
             {/* Sidebar */}
             <motion.aside
                 initial={{ x: -100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
-                className="w-72 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800/50 flex flex-col z-20"
+                className="w-72 bg-patronum-card/50 backdrop-blur-xl border-r border-patronum-border flex flex-col z-20"
             >
                 <div className="p-8 flex items-center gap-4">
                     <img src={logo} alt="Logo" className="w-12 h-12 object-contain" />
@@ -193,7 +216,7 @@ const WorkerDashboard = () => {
                         <h1 className="text-base font-black text-white leading-none tracking-wide">
                             PATRONUM
                         </h1>
-                        <span className="text-sm font-bold text-blue-400 leading-none tracking-wider">
+                        <span className="text-sm font-bold text-patronum-secondary leading-none tracking-wider">
                             ESPORTS
                         </span>
                     </div>
@@ -202,37 +225,49 @@ const WorkerDashboard = () => {
                 <nav className="flex-1 px-4 space-y-2">
                     <button
                         onClick={() => setActiveTab('tasks')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'tasks' ? 'bg-gradient-to-r from-patronum-primary/20 to-fuchsia-600/20 text-white border border-patronum-primary/30' : 'text-slate-400 hover:bg-patronum-hover hover:text-white'}`}
                     >
-                        <FileText size={20} className={activeTab === 'tasks' ? 'text-blue-400' : ''} />
+                        <FileText size={20} className={activeTab === 'tasks' ? 'text-patronum-secondary' : ''} />
                         <span className="font-medium">My Tasks</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('schedule')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'schedule' ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'schedule' ? 'bg-gradient-to-r from-patronum-primary/20 to-fuchsia-600/20 text-white border border-patronum-primary/30' : 'text-slate-400 hover:bg-patronum-hover hover:text-white'}`}
                     >
-                        <CalendarIcon size={20} className={activeTab === 'schedule' ? 'text-blue-400' : ''} />
+                        <CalendarIcon size={20} className={activeTab === 'schedule' ? 'text-patronum-secondary' : ''} />
                         <span className="font-medium">Schedule</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('performance')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'performance' ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'performance' ? 'bg-gradient-to-r from-patronum-primary/20 to-fuchsia-600/20 text-white border border-patronum-primary/30' : 'text-slate-400 hover:bg-patronum-hover hover:text-white'}`}
                     >
-                        <Activity size={20} className={activeTab === 'performance' ? 'text-blue-400' : ''} />
+                        <Activity size={20} className={activeTab === 'performance' ? 'text-patronum-secondary' : ''} />
                         <span className="font-medium">Performance</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('profile')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-gradient-to-r from-patronum-primary/20 to-fuchsia-600/20 text-white border border-patronum-primary/30' : 'text-slate-400 hover:bg-patronum-hover hover:text-white'}`}
                     >
-                        <User size={20} className={activeTab === 'profile' ? 'text-blue-400' : ''} />
+                        <User size={20} className={activeTab === 'profile' ? 'text-patronum-secondary' : ''} />
                         <span className="font-medium">Profile</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('messages')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative ${activeTab === 'messages' ? 'bg-gradient-to-r from-patronum-primary/20 to-fuchsia-600/20 text-white border border-patronum-primary/30' : 'text-slate-400 hover:bg-patronum-hover hover:text-white'}`}
+                    >
+                        <MessageSquare size={20} className={activeTab === 'messages' ? 'text-patronum-secondary' : ''} />
+                        <span className="font-medium">Messages</span>
+                        {unreadCount > 0 && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] flex justify-center">
+                                {unreadCount}
+                            </span>
+                        )}
                     </button>
                 </nav>
 
-                <div className="p-4 border-t border-slate-800/50">
-                    <div className="bg-slate-800/50 rounded-xl p-4 flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center font-bold text-lg overflow-hidden">
+                <div className="p-4 border-t border-patronum-border">
+                    <div className="bg-patronum-bg/50 rounded-xl p-4 flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-patronum-primary to-fuchsia-500 flex items-center justify-center font-bold text-lg overflow-hidden">
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (
@@ -254,14 +289,14 @@ const WorkerDashboard = () => {
             </motion.aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto z-10 p-8 flex flex-col">
-                <header className="flex justify-between items-center mb-8">
+            <main className="flex-1 overflow-hidden z-10 p-8 flex flex-col min-h-0">
+                <header className="flex justify-between items-center mb-8 shrink-0">
                     <div>
                         <h2 className="text-3xl font-bold text-white">
-                            {activeTab === 'tasks' ? 'My Tasks' : activeTab === 'schedule' ? 'Schedule' : activeTab === 'performance' ? 'Performance' : 'My Profile'}
+                            {activeTab === 'tasks' ? 'My Tasks' : activeTab === 'schedule' ? 'Schedule' : activeTab === 'performance' ? 'Performance' : activeTab === 'messages' ? 'Messages' : 'My Profile'}
                         </h2>
                         <p className="text-slate-400">
-                            {activeTab === 'tasks' ? 'Manage your assigned work.' : activeTab === 'schedule' ? 'View your upcoming deadlines.' : activeTab === 'performance' ? 'Track your productivity stats.' : 'Manage your account details.'}
+                            {activeTab === 'tasks' ? 'Manage your assigned work.' : activeTab === 'schedule' ? 'View your upcoming deadlines.' : activeTab === 'performance' ? 'Track your productivity stats.' : activeTab === 'messages' ? 'Communicate with your team.' : 'Manage your account details.'}
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -271,20 +306,20 @@ const WorkerDashboard = () => {
                     </div>
                 </header>
 
-                <div className="flex-1 bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-800/50 overflow-hidden shadow-2xl relative flex flex-col">
+                <div className="flex-1 bg-patronum-card/40 backdrop-blur-md rounded-3xl border border-patronum-border overflow-hidden shadow-2xl relative flex flex-col min-h-0">
                     {activeTab === 'tasks' ? (
                         /* TASKS TAB: Table View */
                         <div className="p-8 h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-6 border-b border-slate-800/50 pb-4">
+                            <div className="flex justify-between items-center mb-6 border-b border-patronum-border pb-4">
                                 <h3 className="text-xl font-semibold flex items-center gap-2 text-white">
-                                    <FileText className="text-purple-400" /> Assigned Tasks
+                                    <FileText className="text-patronum-secondary" /> Assigned Tasks
                                 </h3>
                                 <div className="text-sm text-slate-400">{tasks.length} Total Tasks</div>
                             </div>
 
-                            <div className="flex-1 overflow-auto custom-scrollbar bg-slate-800/20 rounded-2xl border border-slate-700/50">
+                            <div className="flex-1 overflow-auto custom-scrollbar bg-patronum-bg/20 rounded-2xl border border-patronum-border">
                                 <table className="w-full text-left text-sm text-slate-400">
-                                    <thead className="bg-slate-900/50 text-slate-200 sticky top-0 z-10 backdrop-blur-md">
+                                    <thead className="bg-patronum-bg/50 text-slate-200 sticky top-0 z-10 backdrop-blur-md">
                                         <tr>
                                             <th className="p-4 font-semibold">Title</th>
                                             <th className="p-4 font-semibold">Description</th>
@@ -293,7 +328,7 @@ const WorkerDashboard = () => {
                                             <th className="p-4 font-semibold text-right">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-700/30">
+                                    <tbody className="divide-y divide-patronum-border">
                                         {tasks.length === 0 ? (
                                             <tr>
                                                 <td colSpan="4" className="p-12 text-center text-slate-500">
@@ -303,9 +338,9 @@ const WorkerDashboard = () => {
                                             </tr>
                                         ) : (
                                             tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).map(task => (
-                                                <tr key={task._id} className="hover:bg-slate-800/30 transition-colors group">
+                                                <tr key={task._id} className="hover:bg-patronum-hover transition-colors group">
                                                     <td className="p-4 align-top max-w-xs">
-                                                        <h4 className="text-white font-medium text-base mb-1 group-hover:text-blue-400 transition-colors">{task.title}</h4>
+                                                        <h4 className="text-white font-medium text-base mb-1 group-hover:text-patronum-secondary transition-colors">{task.title}</h4>
                                                         {(() => {
                                                             const allAssets = [...(task.assets || []), ...(task.media || [])];
                                                             if (allAssets.length === 0) return null;
@@ -332,7 +367,7 @@ const WorkerDashboard = () => {
                                                     </td>
                                                     <td className="p-4 align-top max-w-sm">
                                                         <p
-                                                            className="text-slate-400 text-xs line-clamp-2 cursor-pointer hover:text-blue-400 transition-colors"
+                                                            className="text-slate-400 text-xs line-clamp-2 cursor-pointer hover:text-patronum-secondary transition-colors"
                                                             title="Click to view full description"
                                                             onClick={() => setDescriptionModal({ show: true, task })}
                                                         >
@@ -406,26 +441,26 @@ const WorkerDashboard = () => {
                                                                     exit={{ opacity: 0, height: 0, marginTop: 0 }}
                                                                     className="overflow-hidden text-left"
                                                                 >
-                                                                    <div className="bg-purple-500/5 p-4 rounded-xl border border-purple-500/20 space-y-3">
+                                                                    <div className="bg-purple-900/10 p-4 rounded-xl border border-patronum-border space-y-3">
                                                                         <div>
-                                                                            <h5 className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Admin Remarks</h5>
-                                                                            <p className="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800/50">
+                                                                            <h5 className="text-xs font-bold text-patronum-secondary uppercase tracking-wider mb-1">Admin Remarks</h5>
+                                                                            <p className="text-sm text-slate-300 bg-patronum-bg/50 p-3 rounded-lg border border-patronum-border">
                                                                                 {task.remarks || "No text remarks provided."}
                                                                             </p>
                                                                         </div>
                                                                         {task.remarkFile && (
                                                                             <div>
-                                                                                <h5 className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-2">Attached Feedback File</h5>
+                                                                                <h5 className="text-xs font-bold text-patronum-secondary uppercase tracking-wider mb-2">Attached Feedback File</h5>
                                                                                 <div className="flex items-center gap-3">
                                                                                     {task.remarkFile.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                                                                        <a href={task.remarkFile} target="_blank" rel="noreferrer" className="block w-32 h-20 rounded-lg overflow-hidden border border-slate-700 hover:border-purple-500 transition-colors relative group">
+                                                                                        <a href={task.remarkFile} target="_blank" rel="noreferrer" className="block w-32 h-20 rounded-lg overflow-hidden border border-patronum-border hover:border-patronum-primary transition-colors relative group">
                                                                                             <img src={task.remarkFile} alt="Feedback" className="w-full h-full object-cover" />
                                                                                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                                                                 <Download size={16} className="text-white" />
                                                                                             </div>
                                                                                         </a>
                                                                                     ) : (
-                                                                                        <a href={task.remarkFile} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-700 hover:border-purple-500 rounded-lg text-slate-300 hover:text-white transition-colors">
+                                                                                        <a href={task.remarkFile} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-3 bg-patronum-bg/50 border border-patronum-border hover:border-patronum-primary rounded-lg text-slate-300 hover:text-white transition-colors">
                                                                                             <FileText size={16} />
                                                                                             <span className="text-sm font-medium">Download Feedback File</span>
                                                                                         </a>
@@ -447,7 +482,7 @@ const WorkerDashboard = () => {
                                                                     exit={{ opacity: 0, height: 0, marginTop: 0 }}
                                                                     className="overflow-hidden text-left"
                                                                 >
-                                                                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                                                                    <div className="bg-patronum-bg/50 p-3 rounded-xl border border-patronum-border">
                                                                         <div className="flex gap-2 items-center">
                                                                             <div className="relative">
                                                                                 <input
@@ -459,7 +494,7 @@ const WorkerDashboard = () => {
                                                                                 />
                                                                                 <label
                                                                                     htmlFor="submission-upload"
-                                                                                    className={`p-2 rounded-lg border border-slate-700 cursor-pointer transition-colors flex items-center justify-center ${uploading ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 hover:bg-slate-700 text-blue-400 border-blue-500/30'}`}
+                                                                                    className={`p-2 rounded-lg border border-patronum-border cursor-pointer transition-colors flex items-center justify-center ${uploading ? 'bg-patronum-card text-slate-500' : 'bg-patronum-card hover:bg-patronum-hover text-patronum-primary border-patronum-primary/30'}`}
                                                                                     title="Upload File"
                                                                                 >
                                                                                     {uploading ? (
@@ -474,7 +509,7 @@ const WorkerDashboard = () => {
                                                                                 value={submissionLink}
                                                                                 onChange={(e) => setSubmissionLink(e.target.value)}
                                                                                 placeholder={uploading ? "Uploading..." : "Submission URL..."}
-                                                                                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500 outline-none"
+                                                                                className="flex-1 bg-patronum-bg border border-patronum-border rounded-lg px-3 py-2 text-xs text-white focus:border-patronum-primary outline-none"
                                                                                 readOnly={uploading}
                                                                             />
                                                                             <button
@@ -502,21 +537,21 @@ const WorkerDashboard = () => {
                         <div className="p-8 h-full flex flex-col overflow-y-auto custom-scrollbar space-y-8">
                             {/* KPI Cards */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
+                                <div className="bg-patronum-bg/50 p-6 rounded-2xl border border-patronum-border">
                                     <div className="text-slate-400 text-sm font-medium mb-1">Total Assigned</div>
                                     <div className="text-3xl font-bold text-white">{tasks.length}</div>
                                 </div>
-                                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
+                                <div className="bg-patronum-bg/50 p-6 rounded-2xl border border-patronum-border">
                                     <div className="text-slate-400 text-sm font-medium mb-1">Completed</div>
                                     <div className="text-3xl font-bold text-emerald-400">{tasks.filter(t => t.status === 'Completed').length}</div>
                                 </div>
-                                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
+                                <div className="bg-patronum-bg/50 p-6 rounded-2xl border border-patronum-border">
                                     <div className="text-slate-400 text-sm font-medium mb-1">Pending</div>
                                     <div className="text-3xl font-bold text-blue-400">{tasks.filter(t => t.status === 'Pending' || t.status === 'In Progress').length}</div>
                                 </div>
-                                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50">
+                                <div className="bg-patronum-bg/50 p-6 rounded-2xl border border-patronum-border">
                                     <div className="text-slate-400 text-sm font-medium mb-1">Completion Rate</div>
-                                    <div className="text-3xl font-bold text-purple-400">
+                                    <div className="text-3xl font-bold text-patronum-secondary">
                                         {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'Completed').length / tasks.length) * 100) : 0}%
                                     </div>
                                 </div>
@@ -524,7 +559,7 @@ const WorkerDashboard = () => {
 
                             {/* Charts */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[400px]">
-                                <div className="bg-slate-800/30 p-6 rounded-2xl border border-slate-700/50 flex flex-col">
+                                <div className="bg-patronum-bg/30 p-6 rounded-2xl border border-patronum-border flex flex-col">
                                     <h3 className="text-lg font-bold text-white mb-6">Task Status Distribution</h3>
                                     <div className="flex-1 min-h-[300px]">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -532,7 +567,7 @@ const WorkerDashboard = () => {
                                                 data={[
                                                     { name: 'Pending', value: tasks.filter(t => t.status === 'Pending').length, fill: '#94a3b8' },
                                                     { name: 'In Progress', value: tasks.filter(t => t.status === 'In Progress').length, fill: '#3b82f6' },
-                                                    { name: 'Submitted', value: tasks.filter(t => t.status === 'Submitted').length, fill: '#eab308' },
+                                                    { name: 'Submitted', value: tasks.filter(t => t.status === 'Submitted').length, fill: '#a855f7' },
                                                     { name: 'Completed', value: tasks.filter(t => t.status === 'Completed').length, fill: '#10b981' },
                                                     { name: 'Rejected', value: tasks.filter(t => t.status === 'Rejected').length, fill: '#ef4444' },
                                                 ]}
@@ -542,7 +577,7 @@ const WorkerDashboard = () => {
                                                 <XAxis type="number" stroke="#94a3b8" />
                                                 <YAxis dataKey="name" type="category" stroke="#94a3b8" width={100} />
                                                 <RechartsTooltip
-                                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                                                    contentStyle={{ backgroundColor: '#1a0b2e', borderColor: '#3e1f5e', color: '#f8fafc' }}
                                                     itemStyle={{ color: '#f8fafc' }}
                                                 />
                                                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32} />
@@ -551,7 +586,7 @@ const WorkerDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-800/30 p-6 rounded-2xl border border-slate-700/50 flex flex-col">
+                                <div className="bg-patronum-bg/30 p-6 rounded-2xl border border-patronum-border flex flex-col">
                                     <h3 className="text-lg font-bold text-white mb-6">Overall Progress</h3>
                                     <div className="flex-1 min-h-[300px] flex items-center justify-center">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -564,18 +599,21 @@ const WorkerDashboard = () => {
                                                     cx="50%"
                                                     cy="50%"
                                                     innerRadius={80}
-                                                    outerRadius={120}
-                                                    fill="#8884d8"
+                                                    outerRadius={100}
                                                     paddingAngle={5}
                                                     dataKey="value"
                                                 >
-                                                    <Cell key="cell-0" fill="#10b981" />
-                                                    <Cell key="cell-1" fill="#334155" />
+                                                    {
+                                                        [{ name: 'Completed', color: '#10b981' }, { name: 'Remaining', color: '#2e1065' }].map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="#1a0b2e" strokeWidth={2} />
+                                                        ))
+                                                    }
                                                 </Pie>
                                                 <RechartsTooltip
-                                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                                                    contentStyle={{ backgroundColor: '#1a0b2e', borderColor: '#3e1f5e', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                                    itemStyle={{ color: '#ffffff', fontWeight: 'bold' }}
                                                 />
-                                                <Legend />
+                                                <Legend wrapperStyle={{ color: '#94a3b8' }} />
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -587,11 +625,21 @@ const WorkerDashboard = () => {
                         <div className="h-full p-6">
                             <ScheduleView tasks={tasks} />
                         </div>
+                    ) : activeTab === 'messages' ? (
+                        /* MESSAGES TAB - Fixed Height for Chat & WhatsApp */
+                        <div className="h-full flex min-h-0 overflow-hidden gap-4">
+                            <div className="flex-1 min-w-0">
+                                <ChatInterface currentUser={user} />
+                            </div>
+                            <div className="w-80 shrink-0 hidden xl:block">
+                                <WhatsAppConnect />
+                            </div>
+                        </div>
                     ) : (
                         /* PROFILE TAB */
                         <div className="p-8 h-full flex flex-col overflow-y-auto custom-scrollbar">
                             <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-2">
-                                <User className="text-blue-400" /> My Profile
+                                <User className="text-patronum-secondary" /> My Profile
                             </h2>
                             <form onSubmit={handleProfileUpdate} className="max-w-2xl space-y-6">
                                 {/* Avatar Section */}
@@ -626,7 +674,7 @@ const WorkerDashboard = () => {
                                             type="text"
                                             value={profileData.username}
                                             onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500/50"
+                                            className="w-full bg-patronum-bg border border-patronum-border rounded-xl px-4 py-3 text-white outline-none focus:border-patronum-primary"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -635,7 +683,7 @@ const WorkerDashboard = () => {
                                             type="email"
                                             value={profileData.email}
                                             readOnly
-                                            className="w-full bg-slate-900/50 border border-slate-800/50 rounded-xl px-4 py-3 text-slate-500 cursor-not-allowed outline-none"
+                                            className="w-full bg-patronum-bg border border-patronum-border rounded-xl px-4 py-3 text-slate-500 cursor-not-allowed outline-none"
                                         />
                                     </div>
                                 </div>
@@ -645,7 +693,7 @@ const WorkerDashboard = () => {
                                         value={profileData.bio}
                                         onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
                                         rows={4}
-                                        className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500/50 resize-none"
+                                        className="w-full bg-patronum-bg border border-patronum-border rounded-xl px-4 py-3 text-white outline-none focus:border-patronum-primary resize-none"
                                         placeholder="Tell us about yourself..."
                                     />
                                 </div>
@@ -657,7 +705,7 @@ const WorkerDashboard = () => {
                                             type="url"
                                             value={profileData.portfolioLink}
                                             onChange={(e) => setProfileData({ ...profileData, portfolioLink: e.target.value })}
-                                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl pl-12 pr-4 py-3 text-white outline-none focus:border-blue-500/50"
+                                            className="w-full bg-patronum-bg border border-patronum-border rounded-xl pl-12 pr-4 py-3 text-white outline-none focus:border-patronum-primary"
                                             placeholder="https://yourportfolio.com"
                                         />
                                     </div>
@@ -668,14 +716,14 @@ const WorkerDashboard = () => {
                                         type="text"
                                         value={profileData.skills}
                                         onChange={(e) => setProfileData({ ...profileData, skills: e.target.value })}
-                                        className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500/50"
+                                        className="w-full bg-patronum-bg border border-patronum-border rounded-xl px-4 py-3 text-white outline-none focus:border-patronum-primary"
                                         placeholder="Video Editing, Premiere Pro, After Effects"
                                     />
                                 </div>
                                 <div className="pt-4">
                                     <button
                                         type="submit"
-                                        className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20"
+                                        className="px-6 py-3 bg-patronum-primary hover:bg-purple-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-purple-600/20"
                                     >
                                         Save Profile
                                     </button>

@@ -83,32 +83,32 @@ const ScheduleView = ({ tasks }) => {
     const weekDayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     return (
-        <div className="flex flex-col h-full bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl font-sans">
+        <div className="flex flex-col h-full bg-patronum-card/40 backdrop-blur-xl border border-patronum-border rounded-3xl overflow-hidden shadow-2xl font-sans">
             {/* Header - Transparent Glass with Glow */}
-            <div className="relative px-8 py-6 flex items-center justify-between z-10 border-b border-white/5 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+            <div className="relative px-8 py-6 flex items-center justify-between z-10 border-b border-patronum-border bg-gradient-to-r from-patronum-primary/10 to-fuchsia-600/10">
                 <div className="flex flex-col">
-                    <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 capitalize drop-shadow-sm">
+                    <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-patronum-primary to-fuchsia-400 capitalize drop-shadow-sm">
                         {getMonthYearLabel()}
                     </h2>
                     <p className="text-slate-400 text-xs font-medium tracking-wide mt-1">Overview of your deadlines</p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-800/50 p-1 rounded-xl border border-white/10 backdrop-blur-md">
+                <div className="flex items-center gap-2 bg-patronum-bg/50 p-1 rounded-xl border border-patronum-border backdrop-blur-md">
                     <button
                         onClick={prevMonth}
-                        className="p-2 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-all"
+                        className="p-2 hover:bg-patronum-hover rounded-lg text-slate-300 hover:text-white transition-all"
                     >
                         <ChevronLeft size={20} />
                     </button>
                     <button
                         onClick={() => setCurrentDate(new Date())}
-                        className="px-4 py-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white text-xs font-semibold transition-all"
+                        className="px-4 py-1.5 hover:bg-patronum-hover rounded-lg text-slate-300 hover:text-white text-xs font-semibold transition-all"
                     >
                         Today
                     </button>
                     <button
                         onClick={nextMonth}
-                        className="p-2 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-all"
+                        className="p-2 hover:bg-patronum-hover rounded-lg text-slate-300 hover:text-white transition-all"
                     >
                         <ChevronRight size={20} />
                     </button>
@@ -118,7 +118,7 @@ const ScheduleView = ({ tasks }) => {
             {/* Calendar Grid Container */}
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 {/* Headers */}
-                <div className="grid grid-cols-7 border-b border-white/5 bg-white/5 shrink-0">
+                <div className="grid grid-cols-7 border-b border-patronum-border bg-patronum-bg/30 shrink-0">
                     {weekDayHeaders.map(day => (
                         <div key={day} className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center opacity-80">
                             {day}
@@ -128,7 +128,7 @@ const ScheduleView = ({ tasks }) => {
 
                 {/* Days Scroll Area */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <div className="grid grid-cols-7 auto-rows-[minmax(80px,1fr)] divide-x divide-white/5 bg-transparent min-h-full">
+                    <div className="grid grid-cols-7 auto-rows-[minmax(80px,1fr)] divide-x divide-patronum-border bg-transparent min-h-full">
                         {calendarDays.map((dayObj, index) => {
                             // Find tasks for this day
                             const dayTasks = tasks.filter(task => isSameDay(new Date(task.deadline), dayObj.date));
@@ -137,16 +137,16 @@ const ScheduleView = ({ tasks }) => {
                             return (
                                 <div
                                     key={index}
-                                    className={`p-2 flex flex-col border-b border-white/5 transition-all hover:bg-white/5 group relative ${dayObj.isCurrentMonth ? 'bg-transparent' : 'bg-black/20'
+                                    className={`p-2 flex flex-col border-b border-patronum-border transition-all hover:bg-patronum-hover/20 group relative ${dayObj.isCurrentMonth ? 'bg-transparent' : 'bg-black/20'
                                         }`}
                                 >
                                     <div className="flex justify-between items-start mb-1 shrink-0">
                                         <span
                                             className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-all ${isToday
-                                                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/20 scale-105'
-                                                    : dayObj.isCurrentMonth
-                                                        ? 'text-slate-300 group-hover:text-white'
-                                                        : 'text-slate-600'
+                                                ? 'bg-gradient-to-r from-patronum-primary to-fuchsia-500 text-white shadow-lg shadow-patronum-primary/20 scale-105'
+                                                : dayObj.isCurrentMonth
+                                                    ? 'text-slate-300 group-hover:text-white'
+                                                    : 'text-slate-600'
                                                 }`}
                                         >
                                             {dayObj.day}
@@ -157,11 +157,11 @@ const ScheduleView = ({ tasks }) => {
                                         {dayTasks.map(task => {
                                             // Modern dark-theme colors (Neon/Cyberpunk vibe)
                                             const colors = [
-                                                'bg-blue-500/20 text-blue-300 border-blue-500/30',
-                                                'bg-purple-500/20 text-purple-300 border-purple-500/30',
-                                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-                                                'bg-orange-500/20 text-orange-300 border-orange-500/30',
-                                                'bg-pink-500/20 text-pink-300 border-pink-500/30'
+                                                'bg-patronum-primary/20 text-patronum-secondary border-patronum-primary/30', // Purple
+                                                'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30', // Pink
+                                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', // Green
+                                                'bg-amber-500/20 text-amber-300 border-amber-500/30', // Orange
+                                                'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' // Blue/Cyan
                                             ];
                                             const colorClass = colors[task._id.charCodeAt(task._id.length - 1) % colors.length];
 

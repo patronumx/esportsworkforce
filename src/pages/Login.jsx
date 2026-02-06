@@ -54,17 +54,17 @@ const Login = ({ title = "Welcome Back", expectedRole }) => {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[#050b14] relative overflow-hidden font-sans">
+        <div className="flex min-h-screen items-center justify-center bg-patronum-bg relative overflow-hidden font-sans">
             {/* Background Gradients */}
             <div className="absolute top-0 left-0 w-full h-full z-0 overflow-hidden">
-                <div className="absolute top-[-10%] right-[0%] w-[50%] h-[50%] rounded-full bg-blue-600/5 blur-[100px]"></div>
-                <div className="absolute bottom-[-10%] left-[0%] w-[50%] h-[50%] rounded-full bg-purple-600/5 blur-[100px]"></div>
+                <div className="absolute top-[-10%] right-[0%] w-[50%] h-[50%] rounded-full bg-patronum-primary/10 blur-[100px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] left-[0%] w-[50%] h-[50%] rounded-full bg-purple-900/10 blur-[100px]"></div>
             </div>
 
-            <div className="relative z-10 w-full max-w-[420px] p-8 md:p-10 bg-[#0f1218] border border-slate-800 rounded-[2rem] shadow-2xl">
+            <div className="relative z-10 w-full max-w-[420px] p-8 md:p-10 bg-patronum-card border border-patronum-border rounded-[2rem] shadow-2xl">
                 <div className="text-center mb-8">
                     <h2 className="text-4xl font-bold mb-2">
-                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-patronum-primary to-fuchsia-400">
                             {title}
                         </span>
                     </h2>
@@ -73,7 +73,7 @@ const Login = ({ title = "Welcome Back", expectedRole }) => {
 
                 <form onSubmit={handleLogin} className="space-y-5">
                     <div className="relative group">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors z-10">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-patronum-primary transition-colors z-10">
                             <Mail size={20} />
                         </div>
                         <input
@@ -81,13 +81,13 @@ const Login = ({ title = "Welcome Back", expectedRole }) => {
                             placeholder="Email Address"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-2 border-transparent focus:border-blue-500 rounded-xl text-slate-900 font-medium placeholder-slate-500 transition-all outline-none"
+                            className="w-full pl-12 pr-4 py-3.5 bg-patronum-bg/50 border-2 border-transparent focus:border-patronum-primary rounded-xl text-white font-medium placeholder-slate-500 transition-all outline-none"
                             required
                         />
                     </div>
 
                     <div className="relative group">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors z-10">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-patronum-primary transition-colors z-10">
                             <Lock size={20} />
                         </div>
                         <input
@@ -95,27 +95,29 @@ const Login = ({ title = "Welcome Back", expectedRole }) => {
                             placeholder="Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3.5 bg-slate-100 border-2 border-transparent focus:border-blue-500 rounded-xl text-slate-900 font-medium placeholder-slate-500 transition-all outline-none"
+                            className="w-full pl-12 pr-4 py-3.5 bg-patronum-bg/50 border-2 border-transparent focus:border-patronum-primary rounded-xl text-white font-medium placeholder-slate-500 transition-all outline-none"
                             required
                         />
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full py-3.5 px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl text-white font-bold text-lg shadow-lg shadow-blue-600/25 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-6"
+                        className="w-full py-3.5 px-6 bg-gradient-to-r from-patronum-secondary to-patronum-primary hover:from-purple-500 hover:to-violet-500 rounded-xl text-white font-bold text-lg shadow-lg shadow-purple-900/40 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-6"
                     >
                         Sign In <ArrowRight className="h-5 w-5" />
                     </button>
                 </form>
 
-                <div className="mt-8 text-center">
-                    <p className="text-slate-500 text-sm">
-                        Don't have an account?{' '}
-                        <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors hover:underline">
-                            Register here
-                        </Link>
-                    </p>
-                </div>
+                {expectedRole !== 'Admin' && (
+                    <div className="mt-8 text-center">
+                        <p className="text-slate-500 text-sm">
+                            Don't have an account?{' '}
+                            <Link to="/signup" className="text-patronum-secondary hover:text-white font-semibold transition-colors hover:underline">
+                                Register here
+                            </Link>
+                        </p>
+                    </div>
+                )}
             </div>
             {
                 toast.show && (
